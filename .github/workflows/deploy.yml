@@ -1,0 +1,56 @@
+# Builds the Response Builder cloud preview from the `cloud` branch of
+# Ecological-Complexity-Lab/roadmap (public, so no credentials are needed)
+# and publishes it at https://roadmapcloud.ecomplab.com.
+#
+# Run it after pushing to `cloud`: Actions → Deploy cloud preview → Run
+# workflow, or `gh workflow run deploy.yml -R Ecological-Complexity-Lab/roadmap-cloud-site`.
+# It also rebuilds once a day.
+name: Deploy cloud preview
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: response-builder
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Ecological-Complexity-Lab/roadmap
+          ref: cloud
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: response-builder/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      # The cloud branch inherits main's CNAME; this site has its own address.
+      - run: echo roadmapcloud.ecomplab.com > dist/CNAME
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: response-builder/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
